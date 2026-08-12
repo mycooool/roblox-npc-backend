@@ -18,6 +18,10 @@ async def lifespan(app: FastAPI):
                 # nothing needed for shutdown
 app = FastAPI( lifespan = lifespan )
 
+@app.get("/")
+async def root():
+    return {"status": "NPC backend is running"}
+
 class ChatRequest( BaseModel ):
     playerId: str
     message: str

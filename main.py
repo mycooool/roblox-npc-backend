@@ -20,7 +20,7 @@ app = FastAPI( lifespan = lifespan )
 
 @app.get("/")
 async def root():
-    return {"status": "NPC backend is running"}
+    return {"status": "NPC backend is running - for FastAPI, add '/docs' to the end of the URL above"}
 
 class ChatRequest( BaseModel ):
     playerId: str

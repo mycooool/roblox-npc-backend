@@ -29,14 +29,20 @@ class ChatRequest( BaseModel ):
     mode: str = "chat"  # "chat" (short, conversational) or "info" (longer, explanatory)
 
 MODE_INSTRUCTIONS = {
-    "chat": "You are a friendly NPC in a game. Respond casually and briefly, like a real NPC would — 1-2 short sentences max. Stay in character, don't lecture.",
+    "chat": "You are a friendly NPC in a game. Respond casually and briefly, like a real NPC would say out loud — 1 to 3 short, punchy sentences. No lists, no lecturing, no long explanations.",
     "info": "You are a knowledgeable NPC in a game acting as an in-game guide. Give a clear, complete, informative answer, but stay reasonably concise (a short paragraph, not an essay)."
+}
+
+MODE_GENERATION_CONFIG = {
+    "chat": { "maxOutputTokens": 80, "temperature": 0.9 },
+    "info": { "maxOutputTokens": 400, "temperature": 0.7 }
 }
 
 @app.post( "/chat" )
 async def chat( req: ChatRequest ):
     api_key = os.getenv( "GEMINI_API_KEY" )
     system_text = MODE_INSTRUCTIONS.get( req.mode, MODE_INSTRUCTIONS[ "chat" ] )
+    generation_config = MODE_GENERATION_CONFIG.get( req.mode, MODE_GENERATION_CONFIG[ "chat" ] )
 
     async with SessionLocal() as session:
         result = await session.execute(
@@ -57,11 +63,12 @@ async def chat( req: ChatRequest ):
 
         payload = {
             "contents": contents,
-            "systemInstruction": { "parts": [ { "text": system_text } ] }
+            "systemInstruction": { "parts": [ { "text": system_text } ] },
+            "generationConfig": generation_config
         }
 
         try:
-            async with httpx.AsyncClient( timeout = 30.0 ) as client:
+            async with httpx.AsyncClient( timeout=30.0 ) as client:
                 response = await client.post(
                     f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}",
                     json=payload
@@ -78,8 +85,8 @@ async def chat( req: ChatRequest ):
             logger.error( f"Gemini call failed: {e}" )
             reply = "Sorry, I didn't quite catch that — could you try asking again?"
 
-        session.add( Message( player_id = req.playerId, role = "user", content = req.message ) )
-        session.add( Message( player_id = req.playerId, role = "npc", content = reply ) )
+        session.add( Message( player_id=req.playerId, role="user", content=req.message ) )
+        session.add( Message( player_id=req.playerId, role="npc", content=reply ) )
         await session.commit()
 
     return { "reply": reply }

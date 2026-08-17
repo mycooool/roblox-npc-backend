@@ -33,9 +33,12 @@ MODE_INSTRUCTIONS = {
     "info": "You are a knowledgeable NPC in a game acting as an in-game guide. Give a clear, complete, informative answer, but stay reasonably concise (a short paragraph, not an essay)."
 }
 
+# thinkingBudget: 0 disables the model's internal "reasoning" tokens so the
+# full maxOutputTokens budget goes toward the actual visible reply — without
+# this, replies were getting cut off or coming back as single stray words.
 MODE_GENERATION_CONFIG = {
-    "chat": { "maxOutputTokens": 80, "temperature": 0.9 },
-    "info": { "maxOutputTokens": 400, "temperature": 0.7 }
+    "chat": { "maxOutputTokens": 200, "temperature": 0.9, "thinkingConfig": { "thinkingBudget": 0 } },
+    "info": { "maxOutputTokens": 700, "temperature": 0.7, "thinkingConfig": { "thinkingBudget": 0 } }
 }
 
 @app.post( "/chat" )

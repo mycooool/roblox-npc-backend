@@ -7,8 +7,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DATABASE_URL = os.getenv( "DATABASE_URL" )
-engine = create_async_engine( DATABASE_URL )
-SessionLocal = sessionmaker( engine, class_=AsyncSession, expire_on_commit = False )
+engine = create_async_engine( DATABASE_URL, pool_pre_ping = True, pool_recycle = 300 )
+SessionLocal = sessionmaker( engine, class_ = AsyncSession, expire_on_commit = False )
 Base = declarative_base()
 
 class Message( Base ):

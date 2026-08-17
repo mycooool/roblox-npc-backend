@@ -26,7 +26,7 @@ async def root():
 class ChatRequest( BaseModel ):
     playerId: str
     message: str
-    mode: str = "chat"  # "chat" (short, conversational) or "info" (longer, explanatory)
+    mode: str = "chat"
 
 MODE_INSTRUCTIONS = {
     "chat": "You are a friendly NPC in a game. Respond casually and briefly, like a real NPC would say out loud — 1 to 3 short, punchy sentences. No lists, no lecturing, no long explanations.",
@@ -39,6 +39,8 @@ MODE_GENERATION_CONFIG = {
 }
 
 GEMINI_MODEL = "gemini-3.6-flash"
+
+QUOTA_FALLBACK_REPLY = "Whew — quite the crowd of question-askers today. My scrying glass needs a moment to recharge, traveler. Try again shortly!"
 
 @app.post( "/chat" )
 async def chat( req: ChatRequest ):
@@ -69,10 +71,8 @@ async def chat( req: ChatRequest ):
             "generationConfig": generation_config
         }
 
-        # TEMPORARY DEBUG BEHAVIOR: instead of a generic fallback message,
-        # surface the actual error so it shows up right in the Roblox
-        # bubble/Output window. Swap this back to a friendly message once
-        # the root cause is confirmed.
+        # Still showing [DEBUG] text for anything OTHER than 429, since we
+        # haven't fully confirmed every other failure mode is resolved yet.
         reply = "Sorry, I didn't quite catch that — could you try asking again?"
 
         if not api_key:
@@ -85,7 +85,10 @@ async def chat( req: ChatRequest ):
                         json=payload
                     )
 
-                if response.status_code != 200:
+                if response.status_code == 429:
+                    logger.error( f"Gemini quota exceeded: {response.text}" )
+                    reply = QUOTA_FALLBACK_REPLY
+                elif response.status_code != 200:
                     error_snippet = response.text[ :200 ]
                     logger.error( f"Gemini returned HTTP {response.status_code}: {response.text}" )
                     reply = f"[DEBUG] Gemini HTTP {response.status_code}: {error_snippet}"

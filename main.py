@@ -33,12 +33,12 @@ MODE_INSTRUCTIONS = {
     "info": "You are a knowledgeable NPC in a game acting as an in-game guide. Give a clear, complete, informative answer, but stay reasonably concise (a short paragraph, not an essay)."
 }
 
-# thinkingBudget: 0 disables the model's internal "reasoning" tokens so the
-# full maxOutputTokens budget goes toward the actual visible reply — without
-# this, replies were getting cut off or coming back as single stray words.
+# Note: thinkingConfig was removed here — it likely isn't a supported field
+# for this model/endpoint and was causing Gemini to reject every request
+# with an error, which the old except block swallowed silently.
 MODE_GENERATION_CONFIG = {
-    "chat": { "maxOutputTokens": 200, "temperature": 0.9, "thinkingConfig": { "thinkingBudget": 0 } },
-    "info": { "maxOutputTokens": 700, "temperature": 0.7, "thinkingConfig": { "thinkingBudget": 0 } }
+    "chat": { "maxOutputTokens": 300, "temperature": 0.9 },
+    "info": { "maxOutputTokens": 800, "temperature": 0.7 }
 }
 
 @app.post( "/chat" )
@@ -70,23 +70,26 @@ async def chat( req: ChatRequest ):
             "generationConfig": generation_config
         }
 
+        reply = "Sorry, I didn't quite catch that — could you try asking again?"
+
         try:
             async with httpx.AsyncClient( timeout=30.0 ) as client:
                 response = await client.post(
                     f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}",
                     json=payload
                 )
-            data = response.json()
 
-            if "candidates" not in data or not data[ "candidates" ]:
-                logger.error( f"Gemini returned no candidates. Full response: {data}" )
-                reply = "Sorry, I didn't quite catch that — could you try asking again?"
+            if response.status_code != 200:
+                logger.error( f"Gemini returned HTTP {response.status_code}: {response.text}" )
             else:
-                reply = data[ "candidates" ][ 0 ][ "content" ][ "parts" ][ 0 ][ "text" ]
+                data = response.json()
+                if "candidates" not in data or not data[ "candidates" ]:
+                    logger.error( f"Gemini returned no candidates. Full response: {data}" )
+                else:
+                    reply = data[ "candidates" ][ 0 ][ "content" ][ "parts" ][ 0 ][ "text" ]
 
         except Exception as e:
             logger.error( f"Gemini call failed: {e}" )
-            reply = "Sorry, I didn't quite catch that — could you try asking again?"
 
         session.add( Message( player_id=req.playerId, role="user", content=req.message ) )
         session.add( Message( player_id=req.playerId, role="npc", content=reply ) )

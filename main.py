@@ -33,13 +33,12 @@ MODE_INSTRUCTIONS = {
     "info": "You are a knowledgeable NPC in a game acting as an in-game guide. Give a clear, complete, informative answer, but stay reasonably concise (a short paragraph, not an essay)."
 }
 
-# Note: thinkingConfig was removed here — it likely isn't a supported field
-# for this model/endpoint and was causing Gemini to reject every request
-# with an error, which the old except block swallowed silently.
 MODE_GENERATION_CONFIG = {
     "chat": { "maxOutputTokens": 300, "temperature": 0.9 },
     "info": { "maxOutputTokens": 800, "temperature": 0.7 }
 }
+
+GEMINI_MODEL = "gemini-3.6-flash"
 
 @app.post( "/chat" )
 async def chat( req: ChatRequest ):
@@ -70,26 +69,37 @@ async def chat( req: ChatRequest ):
             "generationConfig": generation_config
         }
 
+        # TEMPORARY DEBUG BEHAVIOR: instead of a generic fallback message,
+        # surface the actual error so it shows up right in the Roblox
+        # bubble/Output window. Swap this back to a friendly message once
+        # the root cause is confirmed.
         reply = "Sorry, I didn't quite catch that — could you try asking again?"
 
-        try:
-            async with httpx.AsyncClient( timeout=30.0 ) as client:
-                response = await client.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}",
-                    json=payload
-                )
+        if not api_key:
+            reply = "[DEBUG] GEMINI_API_KEY is missing/empty on the server."
+        else:
+            try:
+                async with httpx.AsyncClient( timeout=30.0 ) as client:
+                    response = await client.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={api_key}",
+                        json=payload
+                    )
 
-            if response.status_code != 200:
-                logger.error( f"Gemini returned HTTP {response.status_code}: {response.text}" )
-            else:
-                data = response.json()
-                if "candidates" not in data or not data[ "candidates" ]:
-                    logger.error( f"Gemini returned no candidates. Full response: {data}" )
+                if response.status_code != 200:
+                    error_snippet = response.text[ :200 ]
+                    logger.error( f"Gemini returned HTTP {response.status_code}: {response.text}" )
+                    reply = f"[DEBUG] Gemini HTTP {response.status_code}: {error_snippet}"
                 else:
-                    reply = data[ "candidates" ][ 0 ][ "content" ][ "parts" ][ 0 ][ "text" ]
+                    data = response.json()
+                    if "candidates" not in data or not data[ "candidates" ]:
+                        logger.error( f"Gemini returned no candidates. Full response: {data}" )
+                        reply = f"[DEBUG] No candidates returned: {str(data)[:200]}"
+                    else:
+                        reply = data[ "candidates" ][ 0 ][ "content" ][ "parts" ][ 0 ][ "text" ]
 
-        except Exception as e:
-            logger.error( f"Gemini call failed: {e}" )
+            except Exception as e:
+                logger.error( f"Gemini call failed: {e}" )
+                reply = f"[DEBUG] Exception: {type(e).__name__}: {str(e)[:150]}"
 
         session.add( Message( player_id=req.playerId, role="user", content=req.message ) )
         session.add( Message( player_id=req.playerId, role="npc", content=reply ) )

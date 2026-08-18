@@ -29,13 +29,16 @@ class ChatRequest( BaseModel ):
     mode: str = "chat"
 
 MODE_INSTRUCTIONS = {
-    "chat": "You are a friendly NPC in a game. Respond casually and briefly, like a real NPC would say out loud — 1 to 3 short, punchy sentences. No lists, no lecturing, no long explanations.",
+    "chat": "You are a friendly NPC in a game. Respond casually and conversationally, like a real NPC would say out loud — a few short sentences is fine, just don't lecture or write an essay. Always finish your thought completely; never trail off mid-sentence.",
     "info": "You are a knowledgeable NPC in a game acting as an in-game guide. Give a clear, complete, informative answer, but stay reasonably concise (a short paragraph, not an essay)."
 }
 
+# Raised well above what a normal reply needs, since gemini-3.6-flash spends
+# part of this budget on internal reasoning before writing the visible
+# reply — too tight a cap was causing mid-sentence cutoffs.
 MODE_GENERATION_CONFIG = {
-    "chat": { "maxOutputTokens": 300, "temperature": 0.9 },
-    "info": { "maxOutputTokens": 800, "temperature": 0.7 }
+    "chat": { "maxOutputTokens": 500, "temperature": 0.9 },
+    "info": { "maxOutputTokens": 900, "temperature": 0.7 }
 }
 
 GEMINI_MODEL = "gemini-3.6-flash"
@@ -71,8 +74,6 @@ async def chat( req: ChatRequest ):
             "generationConfig": generation_config
         }
 
-        # Still showing [DEBUG] text for anything OTHER than 429, since we
-        # haven't fully confirmed every other failure mode is resolved yet.
         reply = "Sorry, I didn't quite catch that — could you try asking again?"
 
         if not api_key:

@@ -33,12 +33,9 @@ MODE_INSTRUCTIONS = {
     "info": "You are a knowledgeable NPC in a game acting as an in-game guide. Give a clear, complete, informative answer, but stay reasonably concise (a short paragraph, not an essay)."
 }
 
-# Raised well above what a normal reply needs, since gemini-3.6-flash spends
-# part of this budget on internal reasoning before writing the visible
-# reply — too tight a cap was causing mid-sentence cutoffs.
 MODE_GENERATION_CONFIG = {
-    "chat": { "maxOutputTokens": 500, "temperature": 0.9 },
-    "info": { "maxOutputTokens": 900, "temperature": 0.7 }
+    "chat": { "maxOutputTokens": 600, "temperature": 0.9 },
+    "info": { "maxOutputTokens": 1000, "temperature": 0.7 }
 }
 
 GEMINI_MODEL = "gemini-3.6-flash"
@@ -99,7 +96,11 @@ async def chat( req: ChatRequest ):
                         logger.error( f"Gemini returned no candidates. Full response: {data}" )
                         reply = f"[DEBUG] No candidates returned: {str(data)[:200]}"
                     else:
-                        reply = data[ "candidates" ][ 0 ][ "content" ][ "parts" ][ 0 ][ "text" ]
+                        candidate = data[ "candidates" ][ 0 ]
+                        finish_reason = candidate.get( "finishReason", "" )
+                        if finish_reason == "MAX_TOKENS":
+                            logger.warning( "Gemini hit MAX_TOKENS — reply may be truncated despite raised limit." )
+                        reply = candidate[ "content" ][ "parts" ][ 0 ][ "text" ]
 
             except Exception as e:
                 logger.error( f"Gemini call failed: {e}" )
